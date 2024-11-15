@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Assignment 5</title>
+    <style>
+      body,
+      html {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background-image: url("src/Background.jpg");
+        background-size: cover;
+      }
+
+      .smooth-transition {
+        transition: left 0.2s, transform 0.2s;
+      }
+
+      #carriage {
+        position: absolute;
+        bottom: 20px;
+        transform: translateX(-70%);
+        z-index: 1;
+      }
+
+      #wheel {
+        position: absolute;
+        bottom: 30px;
+        z-index: 2;
+        transform: translateX(-50%) rotate(0deg);
+      }
+
+      #turret {
+        position: absolute;
+        bottom: 104px;
+        transform-origin: center center;
+        transform: translateX(-60%) rotate(0deg);
+        z-index: 1;
+      }
+
+      #cannonball {
+        display: none;
+        position: absolute;
+        top: 0;
+        left: 40%;
+      }
+
+      #fugo {
+        display: none;
+        position: absolute;
+        top: 0;
+        left: 40%;
+      }
+
+      #explosion {
+        display: none;
+        position: absolute;
+        width: 250px;
+        height: 250px;
+      }
+
+      #topUI {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .uiBackground {
+        display: inline-block;
+        background: rgba(255, 255, 255, 0.8);
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        padding: 10px;
+        border-radius: 5px;
+        width: fit-content;
+      }
+
+      #startPrompt {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 20px;
+        font-size: 24px;
+        text-align: center;
+        border-radius: 10px;
+        z-index: 10;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="topUI">
+      <div class="uiBackground">
+        <label for="speedSlider">Cannon Moving Speed: </label>
+        <input type="range" id="speedSlider" min="1" max="10" value="5" />
+      </div>
+      <div class="uiBackground">
+        <span id="lives">Lives left: 5</span>
+      </div>
+      <div class="uiBackground">
+        <label for="score">Score: </label>
+        <span id="score">0</span>
+      </div>
+    </div>
+    <div class="uiBackground">
+      <div id="startPrompt">Press "Space" to Play!</div>
+    </div>
+    <div id="cannon">
+      <img
+        src="src/Carriage.png"
+        id="carriage"
+        alt="carriage"
+        class="smooth-transition"
+      />
+      <img
+        src="src/Wheel.png"
+        id="wheel"
+        alt="Wheel"
+        class="smooth-transition"
+      />
+      <img
+        src="src/Turret.png"
+        id="turret"
+        alt="Turret"
+        class="smooth-transition"
+      />
+    </div>
+    <img src="src/cannonball.png" id="cannonball" alt="Cannonball" />
+    <img src="src/FuGo.png" id="fugo" alt="fugo" />
+    <img src="src/explosion.gif" id="explosion" alt="explosion" />
+    <audio id="shotSound" src="src/shot.m4a"></audio>
+    <audio id="explosionSound" src="src/explosion.m4a"></audio>
+
+    <script>
+      function disableTransitions() {
+        document
+          .getElementById("carriage")
+          .classList.remove("smooth-transition");
+        document.getElementById("wheel").classList.remove("smooth-transition");
+        document.getElementById("turret").classList.remove("smooth-transition");
+      }
+
+      function enableTransitions() {
+        document.getElementById("carriage").classList.add("smooth-transition");
+        document.getElementById("wheel").classList.add("smooth-transition");
+        document.getElementById("turret").classList.add("smooth-transition");
+      }
+
+      function updatePosition() {
+        cannonX = Math.max(
+          carriage.width / 1.4,
+          Math.min(cannonX, window.innerWidth - carriage.width / 2)
+        );
+        carriage.style.left = cannonX + "px";
+        wheel.style.left = cannonX + "px";
+        turret.style.left = cannonX + "px";
+      }
+
+      function moveCannon(event) {
+        if (!cannonballFlying) {
+          switch (event.key) {
+            case "ArrowLeft":
+              cannonX -= speed;
+              wheelRotation = wheelRotation - speed;
+              break;
+            case "ArrowRight":
+              cannonX += speed;
+              wheelRotation = wheelRotation + speed;
+              break;
+            case "ArrowUp":
+              turretAngle = Math.max(turretMaxUp, turretAngle - 5);
+              break;
+            case "ArrowDown":
+              turretAngle = Math.min(turretMaxDown, turretAngle + 5);
+              break;
+            case " ":
+              fireCannonball();
+              break;
+          }
+          updatePosition();
+          turret.style.transform = `translateX(-60%) rotate(${turretAngle}deg)`;
+          wheel.style.transform = `translateX(-50%) rotate(${wheelRotation}deg)`;
+        }
+      }
+
+      function fireCannonball() {
+        cannonballFlying = true;
+        cannonball.style.display = "block";
+        shotSound.currentTime = 0;
+        shotSound.play();
+
+        const turretRect = turret.getBoundingClientRect();
+        const turretCenterX = turretRect.left + turretRect.width / 2;
+        const turretCenterY = turretRect.top + turretRect.height / 2 - 10;
+
+        const angleInRadians = (turretAngle * Math.PI) / -180;
+        const cannonballSpeed = 10;
+        const offset = 100;
+        let cannonballX = turretCenterX + offset * Math.cos(angleInRadians);
+        let cannonballY = turretCenterY - offset * Math.sin(angleInRadians);
+
+        const interval = setInterval(() => {
+          cannonballX += cannonballSpeed * Math.cos(angleInRadians);
+          cannonballY -= cannonballSpeed * Math.sin(angleInRadians);
+          cannonball.style.left = cannonballX + "px";
+          cannonball.style.top = cannonballY + "px";
+
+          if (
+            cannonballX > window.innerWidth ||
+            cannonballY < 0 ||
+            cannonballX < 0
+          ) {
+            clearInterval(interval);
+            cannonball.style.display = "none";
+            cannonballFlying = false;
+            shotSound.pause();
+            shotSound.currentTime = 0;
+          }
+
+          if (balloonDropping && checkHit(cannonball.getBoundingClientRect())) {
+            balloonHit(true);
+            clearInterval(interval);
+            cannonball.style.display = "none";
+            cannonballFlying = false;
+            shotSound.pause();
+            shotSound.currentTime = 0;
+          }
+        }, 20);
+      }
+
+      // Checks if the cannonball has hit the Fu-Go balloon
+      function checkHit(cannonballRect) {
+        const fugoRect = fugo.getBoundingClientRect();
+        return (
+          cannonballRect.left < fugoRect.right &&
+          cannonballRect.right > fugoRect.left &&
+          cannonballRect.top < fugoRect.bottom &&
+          cannonballRect.bottom > fugoRect.top
+        );
+      }
+
+      // Function to handle when the Fu-Go balloon is hit by a cannonball or reaches the bottom of the screen
+      // This function plays the explosion animation and sound, updates the score or lives, and spawns a new Fu-Go balloon
+      function balloonHit(isCannonballHit) {
+        const fugoRect = fugo.getBoundingClientRect();
+
+        // Position explosion so its bottom aligns with the bottom of the Fu-Go balloon
+        explosion.style.left = fugo.style.left;
+        explosion.style.top = fugoRect.bottom - explosion.height - 50 + "px";
+
+        fugo.style.display = "none";
+        explosion.style.display = "block";
+
+        explosionSound.pause();
+        explosionSound.currentTime = 0;
+        explosionSound.load();
+        explosionSound.play().catch((error) => {
+          console.error("Audio playback failed:", error);
+        });
+
+        balloonDropping = false;
+
+        setTimeout(() => {
+          explosion.style.display = "none";
+          if (isCannonballHit) {
+            score += 1;
+            scoreElement.textContent = score;
+          } else {
+            lives -= 1;
+            livesElement.textContent = "Lives left: " + lives;
+            if (lives <= 0) {
+              gameOver();
+              return;
+            }
+          }
+          spawnFugo();
+        }, 500);
+      }
+
+      function gameOver() {
+        balloonDropping = false;
+        fugo.style.display = "none";
+        explosion.style.display = "block";
+        livesElement.textContent = "Game Over";
+      }
+
+      // Spawns a new Fu-Go balloon at a random position at the top of the screen
+      // This is called at the start of the game and after a Fu-Go balloon is hit or reaches the bottom of the screen
+      function spawnFugo() {
+        // Clear any existing interval to prevent multiple intervals
+        clearInterval(dropInterval);
+
+        const minX = document.getElementById("carriage").width || 250;
+        const maxX = window.innerWidth - fugo.width;
+        // fugo.style.left = Math.max(minX, Math.random() * maxX) + "px";
+        fugo.style.left = maxX + "px";
+        fugo.style.top = "0px";
+        fugo.style.display = "block";
+        balloonDropping = true;
+
+        dropInterval = setInterval(() => {
+          const fugoRect = fugo.getBoundingClientRect();
+          if (fugoRect.bottom >= window.innerHeight) {
+            clearInterval(dropInterval);
+            balloonHit(false);
+          } else {
+            fugo.style.top = fugoRect.top + 2 + "px";
+          }
+        }, 10);
+      }
+
+      // carriage variables
+      let cannonX = window.innerWidth / 2;
+      let turretAngle = 0;
+      let wheelRotation = 0;
+      const turretMaxUp = -35;
+      const turretMaxDown = 20;
+      let cannonballFlying = false;
+      var speed = 50;
+      const speedSlider = document.getElementById("speedSlider");
+
+      // fugo balloon variables
+      let lives = 5;
+      let score = 0;
+      const livesElement = document.getElementById("lives");
+      const scoreElement = document.getElementById("score");
+      let balloonDropping = false;
+      const fugo = document.getElementById("fugo");
+      const explosion = document.getElementById("explosion");
+      const explosionSound = document.getElementById("explosionSound");
+      var dropInterval;
+
+      // event listeners ==============
+      speedSlider.addEventListener("input", (event) => {
+        speed = Number(event.target.value * 10);
+      });
+
+      window.addEventListener("resize", () => {
+        disableTransitions();
+        updatePosition();
+        setTimeout(enableTransitions, 200);
+      });
+
+      updatePosition();
+
+      window.onload = () => {
+        const startPrompt = document.getElementById("startPrompt");
+
+        // Function to start the game after space bar is pressed
+        // This is needed because without this, most browsers dont allow playing audio without
+        // user interaction, so we must first make the user press something before the audio can play
+        const startGame = (event) => {
+          if (event.key === " ") {
+            // Attempt to play a sound briefly to unlock audio context
+            explosionSound.play().catch(() => {});
+            explosionSound.pause();
+            explosionSound.currentTime = 0;
+
+            startPrompt.style.display = "none";
+
+            document.removeEventListener("keydown", startGame);
+
+            // Call this here so that the first keydown is used for the startGame and then moveCannon after game starts
+            document.addEventListener("keydown", moveCannon);
+
+            spawnFugo();
+          }
+        };
+
+        document.addEventListener("keydown", startGame);
+      };
+    </script>
+  </body>
+</html>
